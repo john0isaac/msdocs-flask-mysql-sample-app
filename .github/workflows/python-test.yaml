@@ -19,7 +19,7 @@ jobs:
       mysql:
         image: mysql:8.2
         env:
-          MYSQL_PASSWORD: mysql
+          MYSQL_ROOT_PASSWORD: mysql
         ports:
         - 3306:3306
         # needed because the mysql container does not provide a healthcheck
