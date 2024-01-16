@@ -17,14 +17,14 @@ services:
 
   db:
     image: mysql:latest
-    restart: unless-stopped
+    restart: always
     volumes:
-      - mysql-data:/var/lib/mysql/data
+      - mysql-data:/var/lib/mysql
     environment:
+      MYSQL_ROOT_PASSWORD: app_password
       MYSQL_DATABASE: app
       MYSQL_USER: app_user
-      MYSQL_PASSWORD: app_password
-      MYSQL_ROOT_PASSWORD: app_password
+      MYSQL_PASS: app_password
 
     # Add "forwardPorts": ["3306"] to **devcontainer.json** to forward MySQL locally.
     # (Adding the "ports" property to this file will not forward from a Codespace.)
