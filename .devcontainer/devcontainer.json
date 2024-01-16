@@ -25,7 +25,7 @@
 						"server": "localhost",
 						"port": 3306,
 						"database": "app",
-						"username": "app_user",
+						"username": "root",
 						"password": "app_password"
 					}
 				],
