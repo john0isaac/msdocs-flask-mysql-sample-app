@@ -49,5 +49,5 @@ jobs:
           env:
             DBNAME: mysql
             DBHOST: localhost
-            DBUSER: mysql
+            DBUSER: root
             DBPASS: mysql
