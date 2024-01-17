@@ -8,6 +8,11 @@ param appServicePlanId string
 param keyVaultName string = ''
 param managedIdentity bool = !empty(keyVaultName)
 
+// Virtual Network Properties
+param vnetName string
+param subnetId string
+param basicPublishingCredentials bool = false
+
 // Runtime Properties
 @allowed([
   'dotnet', 'dotnetcore', 'dotnet-isolated', 'node', 'python', 'java', 'powershell', 'custom'
@@ -42,7 +47,10 @@ resource appService 'Microsoft.Web/sites@2022-03-01' = {
   kind: kind
   properties: {
     serverFarmId: appServicePlanId
+    virtualNetworkSubnetId: subnetId
+    vnetRouteAllEnabled: true
     siteConfig: {
+      vnetName: vnetName
       linuxFxVersion: linuxFxVersion
       alwaysOn: alwaysOn
       ftpsState: ftpsState
@@ -86,7 +94,22 @@ resource appService 'Microsoft.Web/sites@2022-03-01' = {
       configAppSettings
     ]
   }
+  resource basicPublishingCredentialsPoliciesFtp 'basicPublishingCredentialsPolicies' = {
+    name: 'ftp'
+    properties: {
+      allow: basicPublishingCredentials
+    }
+  }
+
+  resource basicPublishingCredentialsPoliciesScm 'basicPublishingCredentialsPolicies' = {
+    name: 'scm'
+    properties: {
+      allow: basicPublishingCredentials
+    }
+  }
 }
+
+
 
 resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = if (!(empty(keyVaultName))) {
   name: keyVaultName
@@ -99,3 +122,5 @@ resource applicationInsights 'Microsoft.Insights/components@2020-02-02' existing
 output identityPrincipalId string = managedIdentity ? appService.identity.principalId : ''
 output name string = appService.name
 output uri string = 'https://${appService.properties.defaultHostName}'
+output id string = appService.id
+

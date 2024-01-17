@@ -12,7 +12,7 @@ param location string
 @description('Id of the user or app to assign application roles')
 param principalId string = ''
 
-var mysqlServerName = '${prefix}-mysql'
+var mysqlServerName = '${resourceToken}mysql'
 var mysqlAdminUser = 'admin${uniqueString(resourceGroup.id)}'
 var mysqlDatabaseName = 'app'
 @secure()
@@ -25,11 +25,57 @@ var resourceToken = toLower(uniqueString(subscription().id, name, location))
 var tags = { 'azd-env-name': name }
 var prefix = '${name}-${resourceToken}'
 var rgName = '${prefix}-rg'
+var vnetName = '${prefix}-vnet'
+var appInsightsName = '${prefix}-appinsights'
+
 
 resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: rgName
   location: location
   tags: tags
+}
+
+// networking
+
+module vnet './core/network/vnet.bicep' = {
+  name: vnetName
+  scope: resourceGroup
+  params: {
+    name: vnetName
+    location: location
+    tags: tags
+  }
+}
+
+// DNS Zones
+module vaultDnsZone './core/network/private-dns-zones.bicep' = {
+  name: 'vault-dnzones'
+  scope: resourceGroup
+  params: {
+    dnsZoneName: 'privatelink.vaultcore.azure.net' 
+    tags: tags
+    virtualNetworkName: vnet.outputs.name
+  }
+}
+
+module websitesDnsZone './core/network/private-dns-zones.bicep' = {
+  name: 'websites-dnzones'
+  scope: resourceGroup
+  params: {
+    dnsZoneName: 'privatelink.azurewebsites.net' 
+    tags: tags
+    virtualNetworkName: vnet.outputs.name
+  }
+}
+
+module databaseDnsZone './core/network/private-dns-zones.bicep' = {
+  name: 'database-dnzones'
+  scope: resourceGroup
+  params: {
+    dnsZoneName: '${mysqlServerName}.private.mysql.database.azure.com' 
+    tags: tags
+    virtualNetworkName: vnet.outputs.name
+  }
 }
 
 module keyVault './core/security/keyvault.bicep' = {
@@ -39,6 +85,7 @@ module keyVault './core/security/keyvault.bicep' = {
     name: '${take(replace(prefix, '-', ''), 17)}-vault'
     location: location
     tags: tags
+    publicNetworkAccess: 'Disabled'
     principalId: principalId
   }
 }
@@ -69,12 +116,26 @@ module keyVaultSecrets './core/security/keyvault-secret.bicep' = [for secret in 
   }
 }]
 
+module keyvaultpe './core/network/private-endpoint.bicep' = {
+  name: 'keyvaultpe'
+  scope: resourceGroup
+  params: {
+    location: location
+    name:'kvpe0${resourceToken}'
+    tags: tags
+    subnetId: vnet.outputs.appSubId
+    serviceId: keyVault.outputs.id
+    groupIds: ['Vault']
+    dnsZoneId: vaultDnsZone.outputs.id
+  }
+}
+
 module monitoring './core/monitor/monitoring.bicep' = {
   name: 'monitoring'
   scope: resourceGroup
   params: {
     logAnalyticsName : '${prefix}-loganalytics'
-    applicationInsightsName : '${prefix}-appinsights'
+    applicationInsightsName : appInsightsName
     applicationInsightsDashboardName: '${prefix}-appinsights-dashboard'
     location: location
     tags: tags
@@ -99,7 +160,8 @@ module mysqlServer 'core/database/mysql/flexibleserver.bicep' = {
     adminName: mysqlAdminUser
     adminPassword: mysqlAdminPassword
     databaseNames: [ mysqlDatabaseName ]
-    allowAzureIPsFirewall: true
+    dbSubId: vnet.outputs.dbSubId
+    dbDnsZoneId: databaseDnsZone.outputs.id
   }
 }
 
@@ -108,21 +170,24 @@ module web 'core/host/appservice.bicep' = {
   scope: resourceGroup
   params: {
     name: '${prefix}-appservice'
+    applicationInsightsName: monitoring.outputs.applicationInsightsName
+    keyVaultName: keyVault.outputs.name
+    vnetName: vnet.outputs.name
+    subnetId: vnet.outputs.websiteSubId
     location: location
     tags: union(tags, { 'azd-service-name': 'web' })
     appServicePlanId: appServicePlan.outputs.id
     runtimeName: 'python'
     runtimeVersion: '3.10'
     scmDoBuildDuringDeployment: true
-    ftpsState: 'Disabled'
     managedIdentity: true
+    basicPublishingCredentials: true
     appCommandLine: 'startup.sh'
     appSettings: {
       AZURE_MYSQL_HOST: mysqlServer.outputs.MYSQL_DOMAIN_NAME
       AZURE_MYSQL_NAME: mysqlDatabaseName
       AZURE_MYSQL_USER: '@Microsoft.KeyVault(VaultName=${keyVault.outputs.name};SecretName=mysqlAdminUser)'
       AZURE_MYSQL_PASSWORD: '@Microsoft.KeyVault(VaultName=${keyVault.outputs.name};SecretName=mysqlAdminPassword)'
-      APPLICATIONINSIGHTS_CONNECTION_STRING: monitoring.outputs.applicationInsightsConnectionString
       SECRET_KEY: '@Microsoft.KeyVault(VaultName=${keyVault.outputs.name};SecretName=secretKey)'
     }
   }

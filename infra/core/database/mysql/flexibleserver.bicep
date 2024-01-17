@@ -14,6 +14,9 @@ param allowAzureIPsFirewall bool = false
 param allowAllIPsFirewall bool = false
 param allowedSingleIPs array = []
 
+param dbSubId string
+param dbDnsZoneId string
+
 @description('MySQL version')
 @allowed([
   '5.7'
@@ -40,6 +43,10 @@ resource mysqlServer 'Microsoft.DBforMySQL/flexibleServers@2021-05-01' = {
     storage: storage
     highAvailability: {
       mode: highAvailabilityMode
+    }
+    network: {
+      delegatedSubnetResourceId: dbSubId
+      privateDnsZoneResourceId: dbDnsZoneId
     }
   }
 
@@ -78,3 +85,5 @@ resource mysqlServer 'Microsoft.DBforMySQL/flexibleServers@2021-05-01' = {
 }
 
 output MYSQL_DOMAIN_NAME string = mysqlServer.properties.fullyQualifiedDomainName
+output id string = mysqlServer.id
+output name string = mysqlServer.name
