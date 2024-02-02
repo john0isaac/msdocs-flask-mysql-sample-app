@@ -2,7 +2,6 @@ Flask
 Flask-Migrate
 Flask-SQLAlchemy
 flask_wtf
-mysql
 mysql-connector-python
 python-dotenv
 SQLAlchemy
