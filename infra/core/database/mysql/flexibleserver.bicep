@@ -31,7 +31,7 @@ param version string = '8.0.21'
 ])
 param highAvailabilityMode string = 'Disabled'
 
-resource mysqlServer 'Microsoft.DBforMySQL/flexibleServers@2021-05-01' = {
+resource mysqlServer 'Microsoft.DBforMySQL/flexibleServers@2023-06-30' = {
   location: location
   tags: tags
   name: name
